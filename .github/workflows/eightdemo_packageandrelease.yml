@@ -1,0 +1,65 @@
+name: Build, Package, and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # The Trigger: Automation starts only when a version tag is pushed
+
+permissions:
+  contents: write   # Power: Allows the YAML to create the Release UI page
+  packages: write   # Power: Allows the YAML to push the Docker Image to GHCR
+
+jobs:
+  # --- JOB 1: THE TECHNICAL BUILD ---
+  build-and-push-container:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 2. Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 3. Extract Metadata (The Translator)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+
+      - name: 4. Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # --- JOB 2: THE UI RELEASE (Only runs if Job 1 succeeds) ---
+  create-github-release:
+    needs: build-and-push-container # The Gatekeeper: Prevents "Broken Releases"
+    runs-on: ubuntu-latest
+    steps:
+      - name: 5. Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 6. Create the Official GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## 🚀 Automated Release ${{ github.ref_name }}
+            
+            **Technical Details:**
+            - **Container:** `ghcr.io/${{ github.repository }}:${{ github.ref_name }}`
+            - **Status:** Verified and Pushed to GitHub Packages.
+            
+            *This release was generated automatically by GitHub Actions.*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
