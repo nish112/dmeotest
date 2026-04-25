@@ -1,0 +1,32 @@
+name: Fifth demo (Github Script Discussion Welcome Bot)
+
+on:
+  discussion:
+    types: [created] # Triggers only when a new discussion starts
+
+jobs:
+  welcome-reply:
+    runs-on: ubuntu-latest
+    permissions:
+      discussions: write # Crucial: The bot needs permission to post
+    steps:
+      - name: Post Welcome Message
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const query = `
+              mutation($discussionId: ID!, $body: String!) {
+                addDiscussionComment(input: {discussionId: $discussionId, body: $body}) {
+                  comment {
+                    url
+                  }
+                }
+              }
+            `;
+            
+            const variables = {
+              discussionId: context.payload.discussion.node_id,
+              body: `Hello @${context.payload.discussion.user.login}! 👋 Welcome to the GH-200 Lab. This is an automated GraphQL response.`
+            };
+
+            await github.graphql(query, variables);
