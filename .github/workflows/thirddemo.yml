@@ -1,200 +1,68 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Action Storyboard: The Dashboard Maker</title>
-    <style>
-        :root {
-            --bg: #0d1117;
-            --card: #161b22;
-            --border: #30363d;
-            --accent: #2ea043; /* Success Green */
-            --danger: #f85149;
-            --success: #3fb950;
-            --text: #c9d1d9;
-            --info: #58a6ff;
-        }
+name: Third demo (GH-200 Matrix Dashboard (Unique Identity))
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-        }
+on:
+  workflow_dispatch:
 
-        .wrapper { width: 100%; max-width: 900px; }
 
-        header { text-align: center; margin-bottom: 40px; }
-        header h1 { color: var(--success); }
+jobs:
+  # JOB 1: Parallel Execution with Unique Naming
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+        values: ["10 20", "40 60"]
 
-        .action-selector {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 10px;
-            margin-bottom: 30px;
-        }
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-        .action-btn {
-            background: var(--card);
-            border: 1px solid var(--border);
-            padding: 15px;
-            border-radius: 6px;
-            color: var(--text);
-            cursor: pointer;
-            text-align: center;
-            font-weight: bold;
-            transition: 0.2s;
-        }
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
 
-        .action-btn:hover { border-color: var(--success); }
-        .action-btn.active { 
-            background: var(--success); 
-            color: white; 
-            border-color: var(--success); 
-        }
+      - name: Execute Logic with Unique Filename
+        run: |
+          mkdir -p output
+          # Define a unique filename using the matrix strategy index
+          # This ensures we don't have 4 files all named "result.txt"
+          FILENAME="result-job-${{ strategy.job-index }}.txt"
+          
+          echo "Processing ${{ matrix.values }} on Node ${{ matrix.node-version }}..."
+          node src/math.js ${{ matrix.values }} > output/$FILENAME
+          
+          echo "Generated: $FILENAME"
 
-        .story-container {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-            animation: slideIn 0.4s ease;
-        }
+      - name: Upload Unique Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          # Naming the container uniquely
+          name: runner-data-${{ strategy.job-index }}
+          path: output/
+          retention-days: 1
 
-        @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+  # JOB 2: Dashboard Generation
+  summary:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-results
 
-        .panel-header {
-            padding: 20px;
-            background: rgba(63, 185, 80, 0.1);
-            border-bottom: 1px solid var(--border);
-            font-size: 1.2em;
-            font-weight: bold;
-        }
+      - name: 📊 Generate Clean Dashboard
+        run: |
+          echo "## 🚀 GH-200 Matrix Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Unique Source File | Math Result | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
 
-        .content-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1px;
-            background: var(--border);
-        }
-
-        .side { padding: 30px; background: var(--card); }
-        h3 { margin-top: 0; display: flex; align-items: center; gap: 10px; }
-        .challenge-title { color: var(--danger); }
-        .solution-title { color: var(--success); }
-
-        .code-box {
-            background: #000;
-            padding: 15px;
-            border-radius: 6px;
-            font-family: monospace;
-            font-size: 0.85em;
-            margin-top: 15px;
-            color: #d1d5db;
-            border-left: 3px solid var(--success);
-        }
-
-        .preview-label {
-            font-size: 0.8em;
-            color: #8b949e;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-        }
-
-        .note-box {
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(88, 166, 255, 0.05);
-            border: 1px solid rgba(88, 166, 255, 0.2);
-            border-radius: 6px;
-            font-size: 0.9em;
-        }
-        
-        .note-tag {
-            color: var(--info);
-            font-weight: bold;
-            display: block;
-            margin-bottom: 5px;
-        }
-    </style>
-</head>
-<body>
-
-<div class="wrapper">
-    <header>
-        <h1>The Dashboard Story</h1>
-        <p>Turning messy logs into clean reports</p>
-    </header>
-
-    <div class="action-selector">
-        <div class="action-btn" onclick="showStory('target')">$GITHUB_STEP_SUMMARY</div>
-        <div class="action-btn" onclick="showStory('loop')">The Find Loop</div>
-        <div class="action-btn" onclick="showStory('output')">Formatted Output</div>
-    </div>
-
-    <div id="display-area"></div>
-</div>
-
-<script>
-    const data = {
-        target: {
-            name: "🎯 The Destination: $GITHUB_STEP_SUMMARY",
-            challenge: "Data calculated during a job is normally buried inside the log files. If you want a quick status update, you have to scroll through 500 lines of console text.",
-            solution: "GitHub provides a 'Special File' for every job. When you append text to this file, GitHub's UI picks it up and renders it as a beautiful report on the main Workflow page.",
-            code: "echo \"## 🚀 Results\" >> $GITHUB_STEP_SUMMARY",
-            note: ""
-        },
-        loop: {
-            name: "🔍 The Find Loop (Search & Extract)",
-            challenge: "The matrix created many different result files (job-0, job-1, etc.). We need to collect them all without knowing exactly how many there are or where they sit.",
-            solution: "We use the `find` command to locate every file. Inside the loop, we use two key helpers to prepare the data: <b>basename</b> and <b>cat</b>.",
-            code: "find all-results -name \"*.txt\" | while read -r file; do\n  FILE_NAME=$(basename \"$file\")\n  RESULT=$(cat \"$file\")\ndone",
-            note: "<span class='note-tag'>💡 Note on File Helpers:</span><b>basename:</b> Strips the folder path (e.g., 'all-results/job-0/result.txt') so you just get the filename.<br><b>cat:</b> Opens the file and 'pours' the text inside into your variable."
-        },
-        output: {
-            name: "📊 Formatted Output (Markdown)",
-            challenge: "Raw text is hard to read. We need to distinguish between the 'Source' and the 'Result' at a single glance.",
-            solution: "We use Markdown syntax (pipes `|` and dashes `-`) to build a table. We use the variables we just extracted to fill the rows.",
-            code: "echo \"| $FILE_NAME | $RESULT | ✅ PASS |\" >> $GITHUB_STEP_SUMMARY",
-            note: ""
-        }
-    };
-
-    function showStory(key) {
-        document.querySelectorAll('.action-btn').forEach(btn => {
-            btn.classList.remove('active');
-            if(btn.innerText.toLowerCase().includes(key.toLowerCase())) btn.classList.add('active');
-        });
-
-        const item = data[key];
-        let noteHtml = item.note ? `<div class="note-box">${item.note}</div>` : '';
-
-        document.getElementById('display-area').innerHTML = `
-            <div class="story-container">
-                <div class="panel-header">${item.name}</div>
-                <div class="content-grid">
-                    <div class="side">
-                        <h3 class="challenge-title">🔴 The Challenge</h3>
-                        <p>${item.challenge}</p>
-                    </div>
-                    <div class="side">
-                        <h3 class="solution-title">🟢 The Solution</h3>
-                        <div class="preview-label">How we solve it:</div>
-                        <p>${item.solution}</p>
-                        <div class="code-box">${item.code.replace(/\n/g, '<br>')}</div>
-                        ${noteHtml}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    showStory('target');
-</script>
-
-</body>
-</html>
+          # We look specifically for the result-job-*.txt files we created
+          find all-results -name "result-job-*.txt" | while read -r file; do
+            FILE_NAME=$(basename "$file")
+            RESULT=$(cat "$file")
+            
+            # This will now display 'result-job-0.txt', 'result-job-1.txt', etc.
+            echo "| \`$FILE_NAME\` | **$RESULT** | ✅ PASS |" >> $GITHUB_STEP_SUMMARY
+          done
