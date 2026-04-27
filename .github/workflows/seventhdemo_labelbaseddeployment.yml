@@ -33,6 +33,7 @@ jobs:
           echo "------------------------------------------------"
           echo "Target PR: #${{ github.event.pull_request.number }}"
           echo "PR Title: ${{ github.event.pull_request.title }}"
+          
           echo "Triggered By: @${{ github.actor }}"
           echo "Label Applied: ${{ github.event.label.name }}"
           echo "Source Branch: ${{ github.head_ref }}"
